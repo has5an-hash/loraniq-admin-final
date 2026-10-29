@@ -1,0 +1,123 @@
+name: Re-render Reza video with moving player progress
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install FFmpeg and Google Drive downloader
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade gdown
+
+      - name: Download source assets from Google Drive
+        run: |
+          gdown "https://drive.google.com/uc?id=1X6ruu0y_0DLnOo8bB3BVF0KxqV6qIO8v" -O source.mp4
+          gdown "https://drive.google.com/uc?id=1GrOp993o8BTtvm4JosOD58MKpdt_PUtV" -O song.mp3
+          gdown "https://drive.google.com/uc?id=1AXv9WRkqAbeabKzSCkZwExQdLxdQvAHG" -O phone.png
+          file source.mp4 song.mp3 phone.png
+          test "$(stat -c%s source.mp4)" -gt 10000
+          test "$(stat -c%s song.mp3)" -gt 10000
+          test "$(stat -c%s phone.png)" -gt 1000
+
+      - name: Render with synchronized timer and filled progress bar
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, subprocess
+
+          def probe(args):
+              raw = subprocess.check_output(
+                  ["ffprobe", "-v", "error", *args,
+                   "-of", "default=noprint_wrappers=1:nokey=1"],
+                  text=True
+              ).strip().splitlines()
+              return float(raw[0])
+
+          video_duration = probe([
+              "-select_streams", "v:0", "-show_entries", "stream=duration",
+              "source.mp4"
+          ])
+          audio_duration = probe([
+              "-show_entries", "format=duration", "song.mp3"
+          ])
+          still_duration = audio_duration - video_duration
+          if still_duration <= 0:
+              raise RuntimeError("Song must be longer than the opening video")
+
+          print(json.dumps({
+              "source_video_seconds": video_duration,
+              "song_seconds": audio_duration,
+              "still_seconds": still_duration,
+              "final_seconds": audio_duration
+          }, indent=2))
+
+          # The player image begins at 00:11. Its time and progress are tied
+          # to the same position expression and reach the end together.
+          pos = f"min({audio_duration:.6f},11+({audio_duration:.6f}-11)*t/{still_duration:.6f})"
+          graph = f"""
+          [0:v]fps=24,scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,trim=duration={video_duration:.6f},setpts=PTS-STARTPTS[v0];
+          [1:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,
+          drawbox=x=154:y=998:w=108:h=39:color=0x171923:t=fill,
+          drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='%{{eif\\:trunc({pos})/60\\:d\\:2}}:%{{eif\\:mod(trunc({pos})\\,60)\\:d\\:2}}':x=164:y=1002:fontsize=22:fontcolor=white:borderw=0,
+          drawbox=x=158:y=958:w=390:h=35:color=0x171923:t=fill,
+          drawbox=x=176:y=972:w=350:h=2:color=0x7f8996:t=fill,
+          drawbox=x=176:y=972:w=350*({pos})/{audio_duration:.6f}:h=2:color=0x4fa7ff:t=fill,
+          drawbox=x=176+350*({pos})/{audio_duration:.6f}-3:y=969:w=6:h=7:color=white:t=fill,
+          trim=duration={still_duration:.6f},setpts=PTS-STARTPTS[v1];
+          [v0][v1]concat=n=2:v=1:a=0,setsar=1/1[vout];
+          [2:a]atrim=duration={audio_duration:.6f},asetpts=PTS-STARTPTS[aout]
+          """
+          graph = ";".join(part.strip() for part in graph.split(";") if part.strip())
+
+          cmd = [
+              "ffmpeg", "-y",
+              "-i", "source.mp4",
+              "-loop", "1", "-framerate", "30", "-t", f"{still_duration:.6f}", "-i", "phone.png",
+              "-i", "song.mp3",
+              "-filter_complex", graph,
+              "-map", "[vout]", "-map", "[aout]",
+              "-t", f"{audio_duration:.6f}",
+              "-c:v", "libx264", "-preset", "ultrafast", "-crf", "19",
+              "-pix_fmt", "yuv420p", "-r", "24",
+              "-c:a", "aac", "-b:a", "192k",
+              "-movflags", "+faststart",
+              "reza_lahze_akhar_fixed_progress.mp4"
+          ]
+          print("Running FFmpeg with synchronized timer, filled bar and moving thumb...")
+          subprocess.run(cmd, check=True)
+          info = subprocess.check_output([
+              "ffprobe", "-v", "error",
+              "-show_entries", "format=duration,size",
+              "-show_entries", "stream=codec_type,width,height,duration",
+              "-of", "json", "reza_lahze_akhar_fixed_progress.mp4"
+          ], text=True)
+          print(info)
+          metadata = json.loads(info)
+          video = next(s for s in metadata["streams"] if s["codec_type"] == "video")
+          if int(video["width"]) != 720 or int(video["height"]) != 1280:
+              raise RuntimeError("Unexpected output dimensions")
+          if abs(float(metadata["format"]["duration"]) - audio_duration) > 1.5:
+              raise RuntimeError("Output duration differs materially from the song")
+          PY
+
+      - name: Publish corrected MP4
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="reza-progress-fixed-${GITHUB_RUN_ID}"
+          gh release create "$TAG" reza_lahze_akhar_fixed_progress.mp4 \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "Reza — Lahze Akhar (timer and progress corrected)" \
+            --notes "Corrected version: the Nokia player timer, filled progress line, and seek marker advance together from 00:11 to the end. Original video audio muted; song only." \
+            --latest=false
