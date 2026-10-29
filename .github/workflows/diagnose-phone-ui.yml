@@ -1,0 +1,73 @@
+name: Diagnose Nokia media-player coordinates
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install image diagnostics
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr
+          python -m pip install --upgrade gdown pillow
+
+      - name: Download phone reference and detect player UI
+        run: |
+          gdown "https://drive.google.com/uc?id=1AXv9WRkqAbeabKzSCkZwExQdLxdQvAHG" -O phone.png
+          python - <<'PY'
+          from PIL import Image, ImageOps
+          import subprocess, csv, io, statistics
+
+          im = Image.open("phone.png").convert("RGB")
+          print("SOURCE_IMAGE_SIZE", im.size)
+          # Mirror the exact framing used in the MP4: fit/crop to 720x1280.
+          fitted = ImageOps.fit(im, (720, 1280), method=Image.Resampling.LANCZOS)
+          fitted.save("phone-fitted.png")
+          raw = subprocess.check_output([
+              "tesseract", "phone.png", "stdout", "--psm", "11", "tsv"
+          ], text=True, stderr=subprocess.STDOUT)
+          rows = list(csv.DictReader(io.StringIO(raw), delimiter="\t"))
+          words = []
+          for r in rows:
+              word = (r.get("text") or "").strip()
+              if word:
+                  item = {
+                      "text": word,
+                      "conf": r.get("conf"),
+                      "left": int(r["left"]), "top": int(r["top"]),
+                      "width": int(r["width"]), "height": int(r["height"])
+                  }
+                  words.append(item)
+          print("OCR_WORDS", words)
+          matches = [w for w in words if ":" in w["text"] or w["text"].lower() in ("00:11","00:1","0011","00:11.")]
+          print("TIME_LIKE_WORDS", matches)
+          # Print strong, long, near-horizontal gray/bright runs around any OCR
+          # timer candidate after scaling to the final video frame.
+          g = ImageOps.grayscale(fitted)
+          pix = g.load()
+          for m in matches:
+              sx, sy = 720/im.width, 1280/im.height
+              cx = round((m["left"] + m["width"]/2)*sx)
+              cy = round((m["top"] + m["height"]/2)*sy)
+              print("SCALED_TIME_BOX", {"text":m["text"],"cx":cx,"cy":cy,
+                    "left":round(m["left"]*sx),"top":round(m["top"]*sy),
+                    "width":round(m["width"]*sx),"height":round(m["height"]*sy)})
+              candidates = []
+              for y in range(max(0,cy-100), min(1280,cy+101)):
+                  xs = []
+                  for x in range(30,690):
+                      v = pix[x,y]
+                      if 95 <= v <= 230:
+                          xs.append(x)
+                  if len(xs) > 100:
+                      # Estimate span of potentially horizontal track-colored pixels.
+                      candidates.append((len(xs),y,min(xs),max(xs)))
+              print("NEARBY_GRAY_ROW_CANDIDATES", sorted(candidates, reverse=True)[:25])
+          PY
