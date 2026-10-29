@@ -49,11 +49,11 @@ jobs:
           graph = r"""
           [0:v]fps=24,scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,trim=duration=VIDEO_DUR,setpts=PTS-STARTPTS,setsar=1/1[v0];
           [1:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,
-          drawbox=x=154:y=756:w=82:h=34:color=0x171923:t=fill,
-          drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='%{eif\:trunc(min(262\,t+11)/60)\:d\:2}\:%{eif\:mod(trunc(min(262\,t+11))\,60)\:d\:2}':x=164:y=759:fontsize=22:fontcolor=white:borderw=0,
-          drawbox=x=158:y=708:w=390:h=34:color=0x171923:t=fill,
-          drawbox=x=176:y=724:w=350:h=2:color=0xa7aeb8:t=fill,
-          drawbox=x=176+350*min(262\,t+11)/272-3:y=721:w=6:h=7:color=white:t=fill,
+          drawbox=x=154:y=998:w=108:h=39:color=0x171923:t=fill,
+          drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='%{eif\:trunc(min(262\,t+11)/60)\:d\:2}\:%{eif\:mod(trunc(min(262\,t+11))\,60)\:d\:2}':x=164:y=1002:fontsize=22:fontcolor=white:borderw=0,
+          drawbox=x=158:y=958:w=390:h=35:color=0x171923:t=fill,
+          drawbox=x=176:y=972:w=350:h=2:color=0xa7aeb8:t=fill,
+          drawbox=x=176+350*min(262\,t+11)/272-3:y=969:w=6:h=7:color=white:t=fill,
           setsar=1/1,trim=duration=STILL_DUR,setpts=PTS-STARTPTS,setsar=1/1[v1];
           [v0][v1]concat=n=2:v=1:a=0,setsar=1/1[vout];
           [2:a]atrim=duration=AUDIO_DUR,asetpts=PTS-STARTPTS[aout]
