@@ -22,9 +22,9 @@ jobs:
 
       - name: Download source assets from Google Drive
         run: |
-          gdown --fuzzy "https://drive.google.com/file/d/1X6ruu0y_0DLnOo8bB3BVF0KxqV6qIO8v/view?usp=sharing" -O source.mp4
-          gdown --fuzzy "https://drive.google.com/file/d/1GrOp993o8BTtvm4JosOD58MKpdt_PUtV/view?usp=sharing" -O song.mp3
-          gdown --fuzzy "https://drive.google.com/file/d/1AXv9WRkqAbeabKzSCkZwExQdLxdQvAHG/view?usp=sharing" -O phone.png
+          gdown "https://drive.google.com/uc?id=1X6ruu0y_0DLnOo8bB3BVF0KxqV6qIO8v" -O source.mp4
+          gdown "https://drive.google.com/uc?id=1GrOp993o8BTtvm4JosOD58MKpdt_PUtV" -O song.mp3
+          gdown "https://drive.google.com/uc?id=1AXv9WRkqAbeabKzSCkZwExQdLxdQvAHG" -O phone.png
           file source.mp4 song.mp3 phone.png
           test "$(stat -c%s source.mp4)" -gt 10000
           test "$(stat -c%s song.mp3)" -gt 10000
