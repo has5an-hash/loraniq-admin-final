@@ -1,1 +1,0 @@
-Temporary trigger for one-off FFmpeg render; remove after completion.
