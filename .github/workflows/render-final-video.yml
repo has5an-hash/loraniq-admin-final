@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   render:
@@ -79,10 +79,12 @@ jobs:
           subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration,size", "-show_entries", "stream=codec_type,width,height,duration", "-of", "json", "reza_lahze_akhar_final.mp4"], check=True)
           PY
 
-      - name: Upload finished MP4
-        uses: actions/upload-artifact@v4
-        with:
-          name: reza-lahze-akhar-final
-          path: reza_lahze_akhar_final.mp4
-          if-no-files-found: error
-          retention-days: 3
+      - name: Publish downloadable MP4 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "reza-final-${GITHUB_RUN_ID}" reza_lahze_akhar_final.mp4 \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "Reza — Lahze Akhar final video" \
+            --notes "Rendered MP4: original park clip, song-only audio, animated Nokia playback timer." \
+            --latest=false
