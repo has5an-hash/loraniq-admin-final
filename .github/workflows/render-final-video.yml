@@ -68,8 +68,8 @@ jobs:
               "-filter_complex", graph,
               "-map", "[vout]", "-map", "[aout]",
               "-t", f"{audio_duration:.6f}",
-              "-c:v", "libx264", "-preset", "medium", "-crf", "18",
-              "-pix_fmt", "yuv420p", "-r", "30",
+              "-c:v", "libx264", "-preset", "ultrafast", "-crf", "19",
+              "-pix_fmt", "yuv420p", "-r", "24",
               "-c:a", "aac", "-b:a", "192k",
               "-movflags", "+faststart",
               "reza_lahze_akhar_final.mp4"
