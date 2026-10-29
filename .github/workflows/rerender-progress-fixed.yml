@@ -65,6 +65,7 @@ jobs:
           # The player image begins at 00:11. Its time and progress are tied
           # to the same position expression and reach the end together.
           pos = f"min({audio_duration:.6f},11+({audio_duration:.6f}-11)*t/{still_duration:.6f})"
+          pos = pos.replace(",", r"\\,")
           graph = f"""
           [0:v]fps=24,scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,trim=duration={video_duration:.6f},setpts=PTS-STARTPTS[v0];
           [1:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,
