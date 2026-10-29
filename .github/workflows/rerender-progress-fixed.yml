@@ -64,13 +64,12 @@ jobs:
 
           # The player image begins at 00:11. Its time and progress are tied
           # to the same position expression and reach the end together.
-          pos = f"min({audio_duration:.6f},11+({audio_duration:.6f}-11)*t/{still_duration:.6f})"
-          pos = pos.replace(",", r"\,")
+          pos = f"11+({audio_duration:.6f}-11)*t/{still_duration:.6f}"
           graph = f"""
           [0:v]fps=24,scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,trim=duration={video_duration:.6f},setpts=PTS-STARTPTS[v0];
           [1:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,
           drawbox=x=154:y=998:w=108:h=39:color=0x171923:t=fill,
-          drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='%{{eif\\:trunc({pos})/60\\:d\\:2}}:%{{eif\\:mod(trunc({pos})\\,60)\\:d\\:2}}':x=164:y=1002:fontsize=22:fontcolor=white:borderw=0,
+          drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='%{{eif\\:trunc(({pos})/60)\\:d\\:2}}\\:%{{eif\\:trunc({pos})-60*trunc(({pos})/60)\\:d\\:2}}':x=164:y=1002:fontsize=22:fontcolor=white:borderw=0,
           drawbox=x=158:y=958:w=390:h=35:color=0x171923:t=fill,
           drawbox=x=176:y=972:w=350:h=2:color=0x7f8996:t=fill,
           drawbox=x=176:y=972:w=350*({pos})/{audio_duration:.6f}:h=2:color=0x4fa7ff:t=fill,
