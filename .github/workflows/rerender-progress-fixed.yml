@@ -18,7 +18,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core
-          python -m pip install --upgrade gdown
+          python -m pip install --upgrade gdown Pillow
 
       - name: Download source assets from Google Drive
         run: |
@@ -30,11 +30,12 @@ jobs:
           test "$(stat -c%s song.mp3)" -gt 10000
           test "$(stat -c%s phone.png)" -gt 1000
 
-      - name: Render with synchronized timer and filled progress bar
+      - name: Render with synchronized timer and animated progress overlay
         shell: bash
         run: |
           python - <<'PY'
-          import json, subprocess
+          import json, math, subprocess
+          from PIL import Image, ImageDraw
 
           def probe(args):
               raw = subprocess.check_output(
@@ -52,18 +53,57 @@ jobs:
               "-show_entries", "format=duration", "song.mp3"
           ])
           still_duration = audio_duration - video_duration
-          if still_duration <= 0:
-              raise RuntimeError("Song must be longer than the opening video")
+          if still_duration <= 0 or audio_duration <= 11:
+              raise RuntimeError("Unexpected source audio/video duration")
 
+          fps = 24
+          frame_count = max(2, round(still_duration * fps))
+          last_frame_time = (frame_count - 1) / fps
           print(json.dumps({
               "source_video_seconds": video_duration,
               "song_seconds": audio_duration,
               "still_seconds": still_duration,
+              "bar_frames": frame_count,
               "final_seconds": audio_duration
           }, indent=2))
 
-          # The player image begins at 00:11. Its time and progress are tied
-          # to the same position expression and reach the end together.
+          # Create a transparent bar overlay as RGBA frames. This makes the
+          # colored progress line and white seek thumb genuinely animate.
+          cmd_bar = [
+              "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+              "-f", "rawvideo", "-pixel_format", "rgba",
+              "-video_size", "350x16", "-framerate", str(fps),
+              "-i", "pipe:0", "-an", "-c:v", "qtrle", "-pix_fmt", "argb",
+              "progress.mov"
+          ]
+          proc = subprocess.Popen(cmd_bar, stdin=subprocess.PIPE)
+          try:
+              for i in range(frame_count):
+                  t = i / fps
+                  ratio_t = min(1.0, t / max(last_frame_time, 1e-6))
+                  player_pos = 11 + (audio_duration - 11) * ratio_t
+                  ratio = max(0.0, min(1.0, player_pos / audio_duration))
+                  end_x = round(349 * ratio)
+                  center_x = round(349 * ratio)
+
+                  frame = Image.new("RGBA", (350, 16), (0, 0, 0, 0))
+                  draw = ImageDraw.Draw(frame)
+                  draw.rectangle((0, 7, 349, 8), fill=(127, 137, 150, 255))
+                  draw.rectangle((0, 7, max(0, end_x), 8), fill=(79, 167, 255, 255))
+                  draw.rectangle(
+                      (max(0, center_x - 3), 4, min(349, center_x + 3), 11),
+                      fill=(255, 255, 255, 255)
+                  )
+                  proc.stdin.write(frame.tobytes())
+              proc.stdin.close()
+          except Exception:
+              if proc.stdin and not proc.stdin.closed:
+                  proc.stdin.close()
+              proc.kill()
+              raise
+          if proc.wait() != 0:
+              raise RuntimeError("Could not encode animated progress overlay")
+
           pos = f"11+({audio_duration:.6f}-11)*t/{still_duration:.6f}"
           graph = f"""
           [0:v]fps=24,scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1/1,trim=duration={video_duration:.6f},setpts=PTS-STARTPTS[v0];
@@ -71,10 +111,9 @@ jobs:
           drawbox=x=154:y=998:w=108:h=39:color=0x171923:t=fill,
           drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='%{{eif\\:trunc(({pos})/60)\\:d\\:2}}\\:%{{eif\\:trunc({pos})-60*trunc(({pos})/60)\\:d\\:2}}':x=164:y=1002:fontsize=22:fontcolor=white:borderw=0,
           drawbox=x=158:y=958:w=390:h=35:color=0x171923:t=fill,
-          drawbox=x=176:y=972:w=350:h=2:color=0x7f8996:t=fill,
-          drawbox=x=176:y=972:w=350*({pos})/{audio_duration:.6f}:h=2:color=0x4fa7ff:t=fill,
-          drawbox=x=176+350*({pos})/{audio_duration:.6f}-3:y=969:w=6:h=7:color=white:t=fill,
-          trim=duration={still_duration:.6f},setpts=PTS-STARTPTS[v1];
+          setsar=1/1[base];
+          [3:v]format=rgba[bar];
+          [base][bar]overlay=x=176:y=964:shortest=1:format=auto,fps=24,trim=duration={still_duration:.6f},setpts=PTS-STARTPTS[v1];
           [v0][v1]concat=n=2:v=1:a=0,setsar=1/1[vout];
           [2:a]atrim=duration={audio_duration:.6f},asetpts=PTS-STARTPTS[aout]
           """
@@ -85,6 +124,7 @@ jobs:
               "-i", "source.mp4",
               "-loop", "1", "-framerate", "30", "-t", f"{still_duration:.6f}", "-i", "phone.png",
               "-i", "song.mp3",
+              "-i", "progress.mov",
               "-filter_complex", graph,
               "-map", "[vout]", "-map", "[aout]",
               "-t", f"{audio_duration:.6f}",
@@ -94,8 +134,9 @@ jobs:
               "-movflags", "+faststart",
               "reza_lahze_akhar_fixed_progress.mp4"
           ]
-          print("Running FFmpeg with synchronized timer, filled bar and moving thumb...")
+          print("Running FFmpeg with the phone timer and animated progress bar...")
           subprocess.run(cmd, check=True)
+
           info = subprocess.check_output([
               "ffprobe", "-v", "error",
               "-show_entries", "format=duration,size",
