@@ -176,7 +176,7 @@ jobs:
               "ffprobe", "-v", "error",
               "-show_entries", "format=duration,size",
               "-show_entries", "stream=codec_type,width,height,duration",
-              "-of", "json", "reza_lahze_akhar_inplayer_fixed.mp4"
+              "-of", "json", "reza_lahze_akhar_inplayer_bolder.mp4"
           ], text=True)
           meta = json.loads(info)
           print("FINAL_METADATA", info)
@@ -191,7 +191,7 @@ jobs:
         run: |
           for spec in "10.5 start" "90 middle" "260 end"; do
             set -- $spec
-            ffmpeg -y -hide_banner -loglevel error -ss "$1" -i reza_lahze_akhar_inplayer_fixed.mp4 -vf "crop=420:100:150:700,scale=840:200" -frames:v 1 "preview_$2.jpg"
+            ffmpeg -y -hide_banner -loglevel error -ss "$1" -i reza_lahze_akhar_inplayer_bolder.mp4 -vf "crop=420:100:150:700,scale=840:200" -frames:v 1 "preview_$2.jpg"
           done
           python - <<'PY'
           import base64
@@ -206,7 +206,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="reza-inplayer-bolder-${GITHUB_RUN_ID}"
-          gh release create "$TAG" reza_lahze_akhar_inplayer_fixed.mp4 \
+          gh release create "$TAG" reza_lahze_akhar_inplayer_bolder.mp4 \
             --repo "${GITHUB_REPOSITORY}" \
             --title "Reza — Lahze Akhar (bolder in-player controls)" \
             --notes "Final refinement: elapsed timer uses a slightly larger bold white typeface in its original phone position; the in-phone progress line is thicker/brighter and its playhead larger, all animated in sync. Right-side total duration remains 04:32. Opening video preserved, source clip audio muted, song only." \
