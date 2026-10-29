@@ -23,13 +23,17 @@ jobs:
           gdown "https://drive.google.com/uc?id=1AXv9WRkqAbeabKzSCkZwExQdLxdQvAHG" -O phone.png
           python - <<'PY'
           from PIL import Image, ImageOps
-          import subprocess, csv, io, statistics
+          import subprocess, csv, io, statistics, base64
 
           im = Image.open("phone.png").convert("RGB")
           print("SOURCE_IMAGE_SIZE", im.size)
           # Mirror the exact framing used in the MP4: fit/crop to 720x1280.
           fitted = ImageOps.fit(im, (720, 1280), method=Image.Resampling.LANCZOS)
           fitted.save("phone-fitted.png")
+          preview = fitted.resize((360, 640), Image.Resampling.LANCZOS)
+          import io as _io
+          b = _io.BytesIO(); preview.save(b, format="JPEG", quality=55)
+          print("PREVIEW_JPEG_BASE64=" + base64.b64encode(b.getvalue()).decode("ascii"))
           raw = subprocess.check_output([
               "tesseract", "phone.png", "stdout", "--psm", "11", "tsv"
           ], text=True, stderr=subprocess.STDOUT)
